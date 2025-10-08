@@ -347,6 +347,53 @@ class SupabaseService:
             return response.data
         except Exception as e:
             raise Exception(f"Error fetching medication schedules: {str(e)}")
+
+    async def get_user_saved_medications(self, user_id: str) -> List[str]:
+        """Return a deduplicated list of medication names the user has saved.
+
+        This aggregates medication names from medication_schedules (active schedules)
+        and extracted_medicines (from OCR uploads).
+        """
+        try:
+            meds = []
+
+            # Medication schedules (active)
+            try:
+                schedules = self.client.table('medication_schedules').select('medication_name').eq('user_id', user_id).eq('is_active', True).execute()
+                if schedules and schedules.data:
+                    meds += [s.get('medication_name') for s in schedules.data if s.get('medication_name')]
+            except Exception:
+                # Non-fatal: continue collecting from other sources
+                pass
+
+            # Extracted medicines via OCR uploads
+            try:
+                # Join extracted_medicines via ocr_uploads owned by user
+                # First get recent uploads ids for user
+                uploads = self.client.table('ocr_uploads').select('id').eq('user_id', user_id).execute()
+                upload_ids = [u.get('id') for u in (uploads.data or []) if u.get('id')]
+                if upload_ids:
+                    # Fetch extracted_medicines for these upload ids
+                    extracted = self.client.table('extracted_medicines').select('extracted_name').in_('ocr_upload_id', upload_ids).execute()
+                    if extracted and extracted.data:
+                        meds += [e.get('extracted_name') for e in extracted.data if e.get('extracted_name')]
+            except Exception:
+                pass
+
+            # Normalize and deduplicate while preserving order
+            seen = set()
+            normalized = []
+            for m in meds:
+                if not m:
+                    continue
+                key = m.strip().lower()
+                if key not in seen:
+                    seen.add(key)
+                    normalized.append(m.strip())
+
+            return normalized
+        except Exception as e:
+            raise Exception(f"Error fetching user saved medications: {str(e)}")
     
     async def get_medication_schedule_by_id(self, schedule_id: str) -> Optional[Dict[str, Any]]:
         """Get medication schedule by ID"""
