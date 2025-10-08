@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import logging
 from services.supabase_service import SupabaseService
 from services.ai_service import AIService
 from services.auth_service import AuthService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 supabase_service = SupabaseService()
@@ -111,7 +114,8 @@ async def generate_ai_explanation(request: Request, explanation_request: AIExpla
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"AI explanation generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI explanation service temporarily unavailable")
 
 # Alias route for backward compatibility
 @router.post("/explain-risks")
@@ -151,7 +155,8 @@ async def generate_custom_explanation(request: Request, prompt_request: CustomPr
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Custom AI explanation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI explanation service temporarily unavailable")
 
 @router.get("/history")
 async def get_ai_explanation_history(request: Request, limit: int = 10, offset: int = 0):

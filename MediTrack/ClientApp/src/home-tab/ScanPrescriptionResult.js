@@ -6,12 +6,28 @@ import {
   Dimensions,
   Modal,
   TouchableOpacity,
-  Image,
   TextInput,
+  ScrollView,
+  Alert,
 } from "react-native";
-import { CircleButton } from "../components/Button";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
+
+// Helper function to validate and format dates
+const validateDate = (dateStr) => {
+  if (!dateStr || !dateStr.trim()) return "";
+  
+  // Remove any non-numeric characters except / and -
+  const cleaned = dateStr.replace(/[^\d\/\-]/g, '');
+  
+  // Add slashes automatically for DD/MM/YYYY format
+  if (cleaned.length === 8 && !cleaned.includes('/') && !cleaned.includes('-')) {
+    return `${cleaned.substring(0,2)}/${cleaned.substring(2,4)}/${cleaned.substring(4,8)}`;
+  }
+  
+  return cleaned;
+};
 
 const ScanPrescriptionResult = ({
   visible,
@@ -21,149 +37,257 @@ const ScanPrescriptionResult = ({
 }) => {
   const [editableMeds, setEditableMeds] = useState([]);
   const [editMode, setEditMode] = useState(false);
+  const [diseaseName, setDiseaseName] = useState("");
 
   useEffect(() => {
     if (visible) {
       setEditMode(false);
-      setEditableMeds(
-        medications.map((m) => ({
-          name: m.name || "",
-          dosage: m.dosage || "",
-          frequency: m.frequency || "",
-        }))
-      );
+      const normalizedMeds = medications.map((m, index) => ({
+        id: index,
+        name: m.name || "",
+        dosage: m.dosage || "",
+        frequency: m.frequency || "",
+        duration: m.duration || "",
+        start_date: m.start_date || "",
+        end_date: m.end_date || "",
+        instructions: m.instructions || "",
+      }));
+      setEditableMeds(normalizedMeds);
+      
+      // Extract disease name if available
+      if (medications.length > 0 && medications[0].disease_name) {
+        setDiseaseName(medications[0].disease_name);
+      }
     }
   }, [visible, medications]);
 
   const addEmptyMedicine = () => {
-    setEditableMeds((prev) => [
-      ...prev,
-      { name: "", dosage: "", frequency: "" },
-    ]);
+    const newMed = {
+      id: Date.now(),
+      name: "",
+      dosage: "",
+      frequency: "",
+      duration: "",
+      start_date: "",
+      end_date: "",
+      instructions: "",
+    };
+    setEditableMeds((prev) => [...prev, newMed]);
+  };
+
+  const updateMedication = (id, field, value) => {
+    setEditableMeds((prev) =>
+      prev.map((med) => (med.id === id ? { ...med, [field]: value } : med))
+    );
+  };
+
+  const removeMedication = (id) => {
+    Alert.alert(
+      "Xóa thuốc",
+      "Bạn có chắc muốn xóa thuốc này?",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          style: "destructive",
+          onPress: () => {
+            setEditableMeds((prev) => prev.filter((med) => med.id !== id));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirm = () => {
+    const validMeds = editableMeds.filter((med) => med.name.trim());
+    if (validMeds.length === 0) {
+      Alert.alert("Lỗi", "Vui lòng thêm ít nhất một loại thuốc");
+      return;
+    }
+
+    const formattedMeds = validMeds.map((m) => ({
+      medication_name: m.name,
+      name: m.name,
+      dosage: m.dosage || null,
+      frequency: m.frequency || null,
+      duration: m.duration || null,
+      start_date: m.start_date || null,
+      end_date: m.end_date || null,
+      instructions: m.instructions || null,
+      disease_name: diseaseName || null,
+    }));
+
+    onConfirm(formattedMeds);
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-    >
+    <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={styles.container}>
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.closeText}>←</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.headerButton}>
+            <Ionicons name="close" size={24} color="#007AFF" />
           </TouchableOpacity>
-          <Text style={styles.title}>Confirm Medications</Text>
-          <CircleButton />
+          <Text style={styles.headerTitle}>Kết quả scan đơn thuốc</Text>
+          <View style={styles.headerButton} />
         </View>
 
-        {/* Checkmark */}
-        <Image
-          source={require("./assets/checkmark.png")}
-          style={styles.checkmark}
-        />
+        {/* Success Icon */}
+        <View style={styles.successContainer}>
+          <View style={styles.successIcon}>
+            <Ionicons name="checkmark-circle" size={80} color="#34C759" />
+          </View>
+          <Text style={styles.successTitle}>Scan thành công!</Text>
+          <Text style={styles.successSubtitle}>
+            Chúng tôi đã phát hiện {editableMeds.length} loại thuốc
+          </Text>
+        </View>
 
-        {/* Detected meds box */}
-        <View style={styles.detectedBox}>
-          <Text style={styles.detectedTitle}>We detected:</Text>
-          {editableMeds.map((med, index) => {
-            const name = med.name || "Unknown";
-            const dosage = med.dosage ? ` • ${med.dosage}` : "";
-            const frequency = med.frequency ? ` • ${med.frequency}` : "";
-            return (
-              <View key={index} style={styles.medRow}>
-                <Image
-                  source={require("./assets/pill-icon.png")}
-                  style={styles.pillIcon}
-                />
-                {editMode ? (
-                  <View style={{ flex: 1 }}>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Disease Name Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Chẩn đoán</Text>
+            <View style={styles.diseaseContainer}>
+              <TextInput
+                style={styles.diseaseInput}
+                value={diseaseName}
+                onChangeText={setDiseaseName}
+                placeholder="Nhấn để thêm chẩn đoán"
+                placeholderTextColor="#999"
+              />
+            </View>
+          </View>
+
+          {/* Medications Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Danh sách thuốc</Text>
+              <TouchableOpacity onPress={addEmptyMedicine} style={styles.addButton}>
+                <Ionicons name="add-circle" size={24} color="#007AFF" />
+                <Text style={styles.addButtonText}>Thêm</Text>
+              </TouchableOpacity>
+            </View>
+
+            {editableMeds.map((med, index) => (
+              <View key={med.id} style={styles.medicationCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.medicationNumber}>
+                    <Text style={styles.numberText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.cardTitle}>
+                    {med.name || "Thuốc mới"}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => removeMedication(med.id)}
+                    style={styles.removeButton}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.cardContent}>
+                  {/* Medication Name */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Tên thuốc</Text>
                     <TextInput
-                      style={styles.input}
+                      style={styles.textInput}
                       value={med.name}
-                      onChangeText={(text) => {
-                        const updated = [...editableMeds];
-                        updated[index].name = text;
-                        setEditableMeds(updated);
-                      }}
-                      placeholder="Medicine name"
-                    />
-                    <TextInput
-                      style={styles.input}
-                      value={med.dosage}
-                      onChangeText={(text) => {
-                        const updated = [...editableMeds];
-                        updated[index].dosage = text;
-                        setEditableMeds(updated);
-                      }}
-                      placeholder="Dosage"
-                    />
-                    <TextInput
-                      style={styles.input}
-                      value={med.frequency}
-                      onChangeText={(text) => {
-                        const updated = [...editableMeds];
-                        updated[index].frequency = text;
-                        setEditableMeds(updated);
-                      }}
-                      placeholder="Frequency"
+                      onChangeText={(text) => updateMedication(med.id, "name", text)}
+                      placeholder="Nhập tên thuốc"
+                      placeholderTextColor="#999"
                     />
                   </View>
-                ) : (
-                  <Text style={styles.medText}>
-                    {name}
-                    {dosage}
-                    {frequency}
-                  </Text>
-                )}
 
-                {editMode && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      const updated = [...editableMeds];
-                      updated.splice(index, 1);
-                      setEditableMeds(updated);
-                    }}
-                  >
-                    <Text style={styles.deleteIcon}>➖</Text>
-                  </TouchableOpacity>
-                )}
+                  {/* Row 1: Dosage & Frequency */}
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Liều dùng</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.dosage}
+                        onChangeText={(text) => updateMedication(med.id, "dosage", text)}
+                        placeholder="VD: 500mg"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Tần suất</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.frequency}
+                        onChangeText={(text) => updateMedication(med.id, "frequency", text)}
+                        placeholder="VD: 2 lần/ngày"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Row 2: Duration & Instructions */}
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Thời gian</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.duration}
+                        onChangeText={(text) => updateMedication(med.id, "duration", text)}
+                        placeholder="VD: 7 ngày"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Ghi chú</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.instructions}
+                        onChangeText={(text) => updateMedication(med.id, "instructions", text)}
+                        placeholder="VD: Sau ăn"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
+                  </View>
+
+                  {/* Row 3: Start & End Date */}
+                  <View style={styles.inputRow}>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Ngày bắt đầu</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.start_date}
+                        onChangeText={(text) => updateMedication(med.id, "start_date", validateDate(text))}
+                        placeholder="DD/MM/YYYY"
+                        placeholderTextColor="#999"
+                        maxLength={10}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={styles.inputHalf}>
+                      <Text style={styles.inputLabel}>Ngày kết thúc</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={med.end_date}
+                        onChangeText={(text) => updateMedication(med.id, "end_date", validateDate(text))}
+                        placeholder="DD/MM/YYYY"
+                        placeholderTextColor="#999"
+                        maxLength={10}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </View>
               </View>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        </ScrollView>
 
-        {/* ➕ Add Medicine */}
-        {editMode && (
-          <TouchableOpacity onPress={addEmptyMedicine} style={styles.addButton}>
-            <Text style={styles.addButtonText}>➕ Add Medicine</Text>
+        {/* Bottom Actions */}
+        <View style={styles.bottomActions}>
+          <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+            <Text style={styles.cancelText}>Hủy</Text>
           </TouchableOpacity>
-        )}
-
-        {/* Action buttons */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => setEditMode((prev) => !prev)}
-          >
-            <Text style={styles.secondaryText}>
-              {editMode ? "Done" : "Edit"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryText}>Other Action</Text>
+          <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
+            <Text style={styles.confirmText}>Xác nhận</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Confirm button */}
-        <TouchableOpacity
-          style={styles.confirmButton}
-          onPress={() => onConfirm(editableMeds.map((m) => m.name))}
-        >
-          <Text style={styles.confirmText}>CONFIRM</Text>
-        </TouchableOpacity>
       </View>
     </Modal>
   );
@@ -172,123 +296,195 @@ const ScanPrescriptionResult = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
+    backgroundColor: "#f8f9fa",
   },
-  topBar: {
-    width: "100%",
-    paddingTop: 60,
-    paddingHorizontal: 20,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-  },
-  closeText: {
-    fontSize: 24,
-    color: "#3763f4",
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#000",
-  },
-  checkmark: {
-    width: 120,
-    height: 120,
-    marginTop: 20,
-    resizeMode: "contain",
-  },
-  detectedBox: {
-    marginTop: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingTop: 50,
     backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    width: width * 0.8,
-    borderWidth: 1.5,
-    borderColor: "#6e9dfc",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
   },
-  detectedTitle: {
-    fontWeight: "bold",
-    color: "#3763f4",
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  medRow: {
-    flexDirection: "row",
+  headerButton: {
+    width: 40,
+    height: 40,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+  },
+  successContainer: {
+    alignItems: "center",
+    paddingVertical: 24,
+    backgroundColor: "#fff",
     marginBottom: 8,
   },
-  pillIcon: {
-    width: 18,
-    height: 18,
-    marginRight: 10,
-    resizeMode: "contain",
+  successIcon: {
+    marginBottom: 12,
   },
-  medText: {
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  input: {
-    borderBottomWidth: 1,
-    borderColor: "#ccc",
-    paddingVertical: 4,
-    marginBottom: 6,
-    fontSize: 14,
-  },
-  deleteIcon: {
+  successTitle: {
     fontSize: 20,
-    color: "#d9534f",
-    marginLeft: 8,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
+  },
+  successSubtitle: {
+    fontSize: 14,
+    color: "#666",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
   },
   addButton: {
-    marginTop: 12,
-    alignSelf: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: "#e9efff",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   addButtonText: {
-    color: "#3763f4",
-    fontWeight: "600",
-    fontSize: 14,
+    color: "#007AFF",
+    fontSize: 16,
+    fontWeight: "500",
   },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: width * 0.8,
-    marginTop: 20,
-  },
-  secondaryButton: {
-    flex: 1,
-    paddingVertical: 10,
-    marginHorizontal: 5,
-    backgroundColor: "#f9f9f9",
+  diseaseContainer: {
+    backgroundColor: "#fff",
     borderRadius: 12,
-    alignItems: "center",
+    padding: 16,
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  secondaryText: {
-    color: "#3763f4",
+  diseaseInput: {
+    fontSize: 16,
+    color: "#333",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  medicationCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  medicationNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#007AFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  numberText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  removeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#ffebee",
+  },
+  cardContent: {
+    gap: 12,
+  },
+  inputGroup: {
+    marginBottom: 8,
+  },
+  inputRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  inputHalf: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+    marginBottom: 4,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#fff",
+    color: "#333",
+  },
+  bottomActions: {
+    flexDirection: "row",
+    padding: 16,
+    gap: 12,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#e0e0e0",
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+  },
+  cancelText: {
+    color: "#666",
+    fontSize: 16,
     fontWeight: "600",
   },
   confirmButton: {
-    marginTop: 25,
-    backgroundColor: "#3763f4",
-    paddingVertical: 15,
-    paddingHorizontal: 80,
-    borderRadius: 14,
-    shadowOpacity: 0.3,
-    elevation: 3,
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#007AFF",
+    alignItems: "center",
   },
   confirmText: {
     color: "#fff",
-    fontWeight: "bold",
     fontSize: 16,
+    fontWeight: "600",
   },
 });
 

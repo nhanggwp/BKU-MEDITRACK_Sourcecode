@@ -401,3 +401,64 @@ INSERT INTO public.medications (name, generic_name, brand_names, drug_class) VAL
     ('Amlodipine', 'amlodipine', ARRAY['Norvasc'], 'Calcium Channel Blocker'),
     ('Simvastatin', 'simvastatin', ARRAY['Zocor'], 'Statin'),
     ('Omeprazole', 'omeprazole', ARRAY['Prilosec'], 'Proton Pump Inhibitor');
+
+-- Prescriptions (records of prescriptions issued to users)
+CREATE TABLE public.prescriptions (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    ocr_upload_id UUID REFERENCES public.ocr_uploads(id),
+    doctor_name TEXT,
+    clinic_name TEXT,
+    prescription_date DATE,
+    disease_name TEXT, -- added field to record diagnosis/disease for uniqueness per prescription
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS on prescriptions and allow users to manage their own prescriptions
+ALTER TABLE public.prescriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own prescriptions" ON public.prescriptions
+    FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX idx_prescriptions_user_id ON public.prescriptions(user_id);
+
+-- Trigger to update updated_at for prescriptions
+CREATE TRIGGER update_prescriptions_updated_at BEFORE UPDATE ON public.prescriptions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Prescription items (searchable history / user-saved meds)
+CREATE TABLE public.prescription_items (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    medication_id UUID REFERENCES public.medications(id),
+    medication_name TEXT NOT NULL,
+    prescription_id UUID REFERENCES public.prescriptions(id),
+    dosage TEXT,
+    frequency TEXT,
+    duration TEXT,
+    start_date DATE,
+    end_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    -- uniqueness is enforced via indexes (see migrations) so we don't declare a table-level UNIQUE constraint here
+);
+
+-- Enable RLS on prescription_items and allow users to manage their own items
+ALTER TABLE public.prescription_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own prescription items" ON public.prescription_items
+    FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX idx_prescription_items_user_id ON public.prescription_items(user_id);
+
+-- Unique constraints for prescription_items:
+-- 1. Within a prescription, each medication can only appear once
+CREATE UNIQUE INDEX uq_prescription_items_pres_med 
+ON public.prescription_items(prescription_id, medication_name) 
+WHERE prescription_id IS NOT NULL;
+
+-- 2. For orphan medications (not linked to any prescription), each user can only have one instance of each medication
+CREATE UNIQUE INDEX uq_prescription_items_orphan_user_med
+ON public.prescription_items(user_id, medication_name) 
+WHERE prescription_id IS NULL;

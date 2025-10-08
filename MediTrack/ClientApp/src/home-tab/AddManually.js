@@ -7,8 +7,8 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  SafeAreaView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons"; // For plus icon
 
 export default function AddManually({ visible, onClose, onSubmit }) {

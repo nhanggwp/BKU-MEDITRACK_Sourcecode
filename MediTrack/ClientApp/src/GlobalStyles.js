@@ -41,13 +41,13 @@ const globalStyles = StyleSheet.create({
 
   headingThree: {
     ...headingBase,
-    fontSize: 24,
+    fontSize: 20,
     paddingVertical: 4,
   },
 
   headingTwo: {
     ...headingBase,
-    fontSize: 27,
+    fontSize: 24,
   },
 
   headingOne: {

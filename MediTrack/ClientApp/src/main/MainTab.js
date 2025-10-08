@@ -13,7 +13,8 @@ const Tab = createBottomTabNavigator();
 
 const MainTab = () => {
   const route = useRoute();
-  const { token } = route.params || {};
+  // Extract token whether navigation used { token } or nested { screen: 'Home', params: { token } }
+  const token = (route.params && (route.params.token || (route.params.params && route.params.params.token))) || null;
 
   return (
     <Tab.Navigator
@@ -51,7 +52,7 @@ const MainTab = () => {
       })}
     >
       <Tab.Screen name="Home" component={Home} initialParams={{ token }} />
-      <Tab.Screen name="Medical History" component={MedicalHistory} />
+      <Tab.Screen name="Medical History" component={MedicalHistory} initialParams={{ token }} />
       {/* <Tab.Screen name="Knowledge Base" component={KnowledgeBase} /> */}
       <Tab.Screen name="Chat" component={Chat} />
       <Tab.Screen name="Profile" component={ProfileStack} />
