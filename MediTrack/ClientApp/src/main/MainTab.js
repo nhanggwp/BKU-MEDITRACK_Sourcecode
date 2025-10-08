@@ -12,7 +12,8 @@ const Tab = createBottomTabNavigator();
 
 const MainTab = () => {
   const route = useRoute();
-  const token = route.params?.token; // ✅ token tới từ LoginForm
+  // Extract token whether navigation used { token } or nested { screen: 'Home', params: { token } }
+  const token = (route.params && (route.params.token || (route.params.params && route.params.params.token))) || null;
 
   return (
     <Tab.Navigator

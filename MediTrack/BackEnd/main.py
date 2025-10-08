@@ -12,8 +12,7 @@ from dotenv import load_dotenv
 
 
 # Load environment variables
-#load_dotenv()
-load_dotenv(".env.example")
+load_dotenv()
 
 # Import our custom modules
 from config.settings import Settings

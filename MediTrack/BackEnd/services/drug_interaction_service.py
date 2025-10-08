@@ -240,4 +240,5 @@ class DrugInteractionService:
             )
             return explanation_result["explanation"].strip()
         except Exception as e:
-            return f"Không thể tạo tóm tắt do lỗi: {e}"
+            logger.error(f"Failed to generate AI summary: {e}")
+            return "Hệ thống đang xử lý thông tin tương tác thuốc. Vui lòng tham khảo danh sách tương tác chi tiết bên dưới."

@@ -69,7 +69,7 @@ const Chat = () => {
 
     try {
       // Get the generative model - using the updated model name
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
       // Create a medical-focused prompt
       const medicalPrompt = `Bạn là MediTrack AI, một trợ lý y tế hữu ích. Vui lòng cung cấp thông tin chính xác, hữu ích về câu hỏi y tế sau dưới dạng câu trả lời ngắn gọn (dưới 100 từ). Luôn nhắc người dùng tham khảo ý kiến chuyên gia y tế đối với các vấn đề sức khỏe nghiêm trọng.
