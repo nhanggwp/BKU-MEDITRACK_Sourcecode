@@ -46,3 +46,5 @@ BackEnd/.env
 BackEnd/.env
 .env
 *.env
+.venv/
+.python-version

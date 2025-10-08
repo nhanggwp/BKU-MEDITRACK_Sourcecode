@@ -21,15 +21,40 @@ class DrugInteractionService:
         self.ai_service = AIService()
 
     async def check_drug_interactions(self, medications: List[str], user_id: str = None,  medical_history: Dict[str, Any] = None) -> Dict[str, Any]:
-        if len(medications) < 2:
+        # If user_id provided, fetch saved medications and merge with scanned list
+        saved_meds = []
+        try:
+            if user_id:
+                saved_meds = await self.supabase.get_user_saved_medications(user_id)
+        except Exception as e:
+            logger.warning(f"Unable to fetch saved medications for user {user_id}: {e}")
+
+        # Merge meds: keep the order of scanned medications first, then append saved meds not already present
+        merged_meds = []
+        seen = set()
+        for m in (medications or []):
+            nm = m.strip()
+            key = nm.lower()
+            if key and key not in seen:
+                seen.add(key)
+                merged_meds.append(nm)
+
+        for m in (saved_meds or []):
+            nm = m.strip()
+            key = nm.lower()
+            if key and key not in seen:
+                seen.add(key)
+                merged_meds.append(nm)
+
+        if len(merged_meds) < 2:
             return {
                 "interactions": [],
                 "risk_level": "low",
-                "summary": "No interactions possible with single medication",
-                "medications_checked": medications
+                "summary": "No interactions possible with fewer than two medications",
+                "medications_checked": merged_meds,
+                "medications_saved": saved_meds
             }
-
-        interactions = await self._find_interactions(medications)
+        interactions = await self._find_interactions(merged_meds)
         risk_level = self._assess_risk_level(interactions)
         summary = await self.summarize_interactions_with_gemini(interactions, medical_history)
 
@@ -41,7 +66,8 @@ class DrugInteractionService:
             "interactions": interactions,
             "risk_level": risk_level,
             "summary": summary,
-            "medications_checked": medications,
+            "medications_checked": merged_meds,
+            "medications_saved": saved_meds,
             "check_timestamp": pd.Timestamp.now().isoformat(),
             "source": "supabase_database"
         }
@@ -214,4 +240,5 @@ class DrugInteractionService:
             )
             return explanation_result["explanation"].strip()
         except Exception as e:
-            return f"Không thể tạo tóm tắt do lỗi: {e}"
+            logger.error(f"Failed to generate AI summary: {e}")
+            return "Hệ thống đang xử lý thông tin tương tác thuốc. Vui lòng tham khảo danh sách tương tác chi tiết bên dưới."

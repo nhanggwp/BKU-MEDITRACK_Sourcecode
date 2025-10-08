@@ -92,7 +92,7 @@ async def analyze_prescription_with_ai(request: Request, analysis_data: Prescrip
         }
         ocr_upload = await supabase_service.save_ocr_upload(user_id, upload_data)
         upload_id = ocr_upload["id"]
-        ai_analysis = await ai_service.analyze_prescription_text(analysis_data.raw_ocr_text)
+        ai_analysis = await ai_service.analyze_prescription_text_enhanced(analysis_data.raw_ocr_text)
 
         extracted_medicines = []
         if ai_analysis.get("medications"):

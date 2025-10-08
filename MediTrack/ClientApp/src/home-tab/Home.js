@@ -8,7 +8,6 @@ import { BASE_URL } from "../../config";
 
 // Modals / subviews
 import CameraScreen from "./CameraScreen";
-import ScanPrescriptionResult from "./ScanPrescriptionResult";
 import ScanQRResult from "./ScanQrResult";
 import ConfirmPrescriptionResult from "./ConfirmPrescriptionResult";
 import WaitingScreen from "./WaitingScreen";
@@ -51,16 +50,33 @@ const _reminderCard = ({ icon, name, time, takenTime, onCheck, isTaken }) => {
   );
 };
 
-// hàm chuẩn hóa, loại bỏ tên thuốc trùng
-const normalizeNames = (arr) => [
-  ...new Map(
-    (Array.isArray(arr) ? arr : [])
-      .map((x) => (typeof x === "string" ? x : x?.name || ""))
-      .map((s) => (s || "").trim())
-      .filter(Boolean)
-      .map((v) => [v.toLowerCase(), v]) // unique by lowercase, keep original casing
-  ).values(),
-];
+// hàm chuẩn hóa tên thuốc -> trả về array các objects { name, dosage?, frequency?, ... }
+const normalizeMeds = (arr) => {
+  const items = Array.isArray(arr) ? arr : [];
+  const mapped = items
+    .map((x) => {
+      if (typeof x === "string") return { name: (x || "").trim() };
+      // if it's already an object, normalize fields
+      return {
+        name: (x?.name || x?.medication_name || "").trim(),
+        dosage: x?.dosage || null,
+        frequency: x?.frequency || null,
+        duration: x?.duration || null,
+        start_date: x?.start_date || null,
+        end_date: x?.end_date || null,
+        notes: x?.notes || null,
+      };
+    })
+    .filter((m) => m.name);
+
+  // dedupe by lowercase name, keep first occurrence
+  const seen = new Map();
+  for (const m of mapped) {
+    const key = m.name.toLowerCase();
+    if (!seen.has(key)) seen.set(key, m);
+  }
+  return Array.from(seen.values());
+};
 
 // 🏠 Main Home screen component
 const Home = () => {
@@ -74,28 +90,28 @@ const Home = () => {
   const [reminders, setReminders] = useState([
     {
       id: 1,
-      name: "Cảm cúm",
-      time: "8:00 AM",
+      name: "Tập yoga",
+      time: "5:00 AM",
       takenTime: "8:03 AM",
       icon: require("./assets/medicine-reminder.png"),
       taken: false,
     },
     {
       id: 2,
-      name: "Viêm mũi dị ứng",
+      name: "Đi bộ",
       time: "5:00 PM",
       takenTime: "5:30 PM",
       icon: require("./assets/medicine-reminder.png"),
       taken: false,
     },
-    {
-      id: 3,
-      name: "Rối loạn tiêu hóa",
-      time: "8:00 PM",
-      takenTime: "8:00 PM",
-      icon: require("./assets/medicine-reminder.png"),
-      taken: false,
-    },
+    // {
+    //   id: 3,
+    //   name: "Rối loạn tiêu hóa",
+    //   time: "8:00 PM",
+    //   takenTime: "8:00 PM",
+    //   icon: require("./assets/medicine-reminder.png"),
+    //   taken: false,
+    // },
   ]);
 
   // 📸 State for camera, modals, results
@@ -103,7 +119,6 @@ const Home = () => {
   const [loading, setLoading] = useState(false);
 
   //Prescription
-  const [showPrescriptionResult, setShowPrescriptionResult] = useState(false); //data is dummy for now
   const [showConfirmResult, setShowConfirmResult] = useState(false); //
 
   //QR Code
@@ -168,35 +183,14 @@ const Home = () => {
 
       const data = await response.json();
 
-      setMedications(data.analysis?.medications || []);
-      setShowPrescriptionResult(true);
+      // Normalize OCR medications và chuyển thẳng đến ConfirmPrescriptionResult
+      const ocrMeds = normalizeMeds(data.analysis?.medications || []);
+      console.log("🔎 Normalized OCR list:", ocrMeds);
+      
+      setMedications(ocrMeds);
+      setShowConfirmResult(true); // Chuyển thẳng đến edit screen
     } catch (err) {
       console.error("❌ OCR failed", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ✅ After confirming result
-  const _handleComfirmResult = async (updatedMeds) => {
-    try {
-      setShowPrescriptionResult(false);
-      setLoading(true);
-
-      const ocrList = normalizeNames(updatedMeds);
-      console.log("🔎 Normalized OCR list:", ocrList);
-
-      // 2) Lấy danh sách thuốc tiền sử từ server
-      const historyList = await fetchSavedMedicationNames();
-      console.log("📚 History list from server:", historyList);
-      const merged = normalizeNames([...ocrList, ...historyList]);
-      console.log("Merged OCR + History (deduped):", merged);
-      setMedications(merged);
-      setShowConfirmResult(true);
-    } catch (e) {
-      console.error("❌ merge confirm meds error:", e);
-      setMedications(normalizeNames(updatedMeds));
-      setShowConfirmResult(true);
     } finally {
       setLoading(false);
     }
@@ -206,7 +200,6 @@ const Home = () => {
   const _handleScanQR = (QrData) => {
     console.log("📦 QR Data received in Home:", QrData);
     setCameraVisible(false);
-    setShowPrescriptionResult(false);
     setQrData(QrData);
     setShowQRResult(true);
   };
@@ -225,12 +218,17 @@ const Home = () => {
       // API có thể trả {"items": ["Paracetamol", ...]} hoặc [{"medication_name": "Paracetamol"}, ...]
       console.log("📥 Response from /prescriptions/list:", data);
 
-      const items = Array.isArray(data?.items) ? data.items : [];
-      const names = items.map((it) =>
-        typeof it === "string" ? it : it?.medication_name || ""
-      );
+      // new API returns { prescriptions: [{ medications: [{ name, dosage, ... }] }] }
+      const groups = Array.isArray(data?.prescriptions) ? data.prescriptions : [];
+      const names = [];
+      for (const g of groups) {
+        for (const m of (g.medications || [])) {
+          if (typeof m === 'string') names.push(m);
+          else names.push(m?.name || m?.medication_name || '');
+        }
+      }
       console.log("📋 Extracted names from history:", names);
-      return normalizeNames(names);
+      return normalizeMeds(names).map(m => m.name);
     } catch (e) {
       console.error("❌ fetchSavedMedicationNames error:", e);
       return [];
@@ -270,7 +268,7 @@ const Home = () => {
       {/* Reminders list */}
       <View style={styles.reminderSection}>
         <Text style={[globalStyles.headingTwo, styles.greenText]}>
-          Reminders
+          Nhắc nhở
         </Text>
         {reminders.map((reminder) => (
           <_reminderCard
@@ -295,14 +293,6 @@ const Home = () => {
 
       {/* Waiting Screen Modal*/}
       <WaitingScreen visible={loading} />
-
-      {/* Prescription Result Modal */}
-      <ScanPrescriptionResult
-        visible={showPrescriptionResult}
-        onConfirm={_handleComfirmResult}
-        onClose={() => setShowPrescriptionResult(false)}
-        medications={medications}
-      />
 
       {/* Confirm Prescription Result Modal */}
       <ConfirmPrescriptionResult

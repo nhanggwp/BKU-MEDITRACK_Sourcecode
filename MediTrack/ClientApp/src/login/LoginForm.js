@@ -27,8 +27,8 @@ const LoginForm = () => {
   const _handleLogin = async () => {
     // const email = loginEmail.trim();
     // const password = loginPassword;
-    const email = "testuser2@gmail.com";
-    const password = "test123";
+    const email = "userdemo@example.com";
+    const password = "userdemo";
 
     try {
       const response = await fetch(`${BASE_URL}/api/auth/signin`, {
