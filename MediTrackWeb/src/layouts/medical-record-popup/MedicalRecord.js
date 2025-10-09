@@ -1,9 +1,39 @@
-// MedicalRecord.js
 import React from "react";
 import "./MedicalRecord.css";
 
+const fmtDate = (d) => {
+  if (!d) return "";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return String(d);
+  return date.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const renderMedications = (text) => {
+  if (!text) return "";
+  const parts = text.split(/,\s*/).filter(Boolean);
+  return (
+    <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
+      {parts.map((p, i) => (
+        <li key={i}>{p}</li>
+      ))}
+    </ul>
+  );
+};
+
 const MedicalRecord = ({ patient, onClose }) => {
   if (!patient) return null;
+
+  const rec = patient.record || patient;
+  const insurance = rec.insurance || {};
+  const emer = rec.emergencyContact || {};
+  const history =
+    (rec.medicalHistory && Array.isArray(rec.medicalHistory)
+      ? rec.medicalHistory
+      : patient.medicalHistory) || [];
 
   return (
     <div className="mr-popup-overlay">
@@ -11,63 +41,63 @@ const MedicalRecord = ({ patient, onClose }) => {
         <button className="mr-close-button" onClick={onClose}>
           X
         </button>
-        {/* Header  */}
+
         <h1>Medical Record</h1>
+
         <section className="mr-section">
-          {/* General Information  */}
           <h2>General Information</h2>
           <p>
-            <strong>Name:</strong> {patient.name}
+            <strong>Name:</strong> {patient.name || rec.name || ""}
           </p>
           <p>
-            <strong>Gender:</strong> {patient.gender}
+            <strong>Gender:</strong> {rec.gender || ""}
           </p>
           <p>
-            <strong>Date of Birth:</strong> {patient.birthDate}
+            <strong>Date of Birth:</strong> {fmtDate(rec.birthDate)}
           </p>
           <p>
-            <strong>Address:</strong> {patient.address}
+            <strong>Address:</strong> {rec.address || ""}
           </p>
           <p>
-            <strong>Phone:</strong> {patient.phone}
+            <strong>Phone:</strong> {rec.phone || ""}
           </p>
           <p>
-            <strong>Marital Status:</strong> {patient.maritalStatus}
+            <strong>Marital Status:</strong> {rec.maritalStatus || ""}
           </p>
           <p>
-            <strong>Email:</strong> {patient.email}
+            <strong>Email:</strong> {rec.email || ""}
           </p>
           <p>
-            <strong>Employment:</strong> {patient.employment}
+            <strong>Employment:</strong> {rec.employment || ""}
           </p>
         </section>
-        {/* Health Coverage  */}
+
         <section className="mr-section">
           <h2>Health Coverage</h2>
           <p>
-            <strong>Provider:</strong> {patient.insurance?.provider}
+            <strong>Provider:</strong> {insurance.provider || ""}
           </p>
           <p>
-            <strong>Plan:</strong> {patient.insurance?.plan}
+            <strong>Plan:</strong> {insurance.plan || ""}
           </p>
           <p>
-            <strong>Insurance ID:</strong> {patient.insurance?.id}
+            <strong>Insurance ID:</strong> {insurance.id || ""}
           </p>
         </section>
-        {/* Emergency Contact  */}
+
         <section className="mr-section">
           <h2>Emergency Contact</h2>
           <p>
-            <strong>Name:</strong> {patient.emergencyContact?.name}
+            <strong>Name:</strong> {emer.name || ""}
           </p>
           <p>
-            <strong>Phone:</strong> {patient.emergencyContact?.phone}
+            <strong>Phone:</strong> {emer.phone || ""}
           </p>
           <p>
-            <strong>Relation:</strong> {patient.emergencyContact?.relation}
+            <strong>Relation:</strong> {emer.relation || ""}
           </p>
         </section>
-        {/* Medical History  */}
+
         <section className="mr-section">
           <h2>Medical History</h2>
           <table>
@@ -80,14 +110,22 @@ const MedicalRecord = ({ patient, onClose }) => {
               </tr>
             </thead>
             <tbody>
-              {patient.medicalHistory?.map((entry, index) => (
-                <tr key={index}>
-                  <td>{entry.condition}</td>
-                  <td>{entry.medication}</td>
-                  <td>{entry.allergy}</td>
-                  <td>{entry.startDate}</td>
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: "center", opacity: 0.7 }}>
+                    No records
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                history.map((entry, idx) => (
+                  <tr key={idx}>
+                    <td>{entry?.condition || ""}</td>
+                    <td>{renderMedications(entry?.medication)}</td>
+                    <td>{entry?.allergy || ""}</td>
+                    <td>{fmtDate(entry?.startDate)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>

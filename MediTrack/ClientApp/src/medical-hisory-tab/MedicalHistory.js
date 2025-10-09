@@ -20,6 +20,40 @@ import { Buffer } from "buffer";
 import utils from './prescriptionUtils';
 const { width, height } = Dimensions.get("window");
 
+const base64UrlToUtf8 = (b64url) => {
+  // chuyển base64-url sang base64 chuẩn + padding
+  let s = (b64url || "").replace(/-/g, "+").replace(/_/g, "/");
+  const pad = s.length % 4;
+  if (pad === 2) s += "==";
+  else if (pad === 3) s += "=";
+  else if (pad === 1) throw new Error("Invalid base64url length");
+  return Buffer.from(s, "base64").toString("utf8");
+};
+
+const decodeJwt = (token) => {
+  // JWT: header.payload.signature
+  if (!token || typeof token !== "string") throw new Error("Empty token");
+  const parts = token.split(".");
+  if (parts.length < 2) throw new Error("Invalid JWT format");
+  const payloadJson = base64UrlToUtf8(parts[1]);
+  return JSON.parse(payloadJson);
+};
+
+const getUserIdFromToken = (token) => {
+  try {
+    const payload = decodeJwt(token);
+    // các field có thể có: sub (chuẩn), id, user_id, email
+    const userId = payload.sub || payload.user_id || payload.id || null;
+    // log đầy đủ để debug
+    console.log("🔍 JWT payload:", payload);
+    console.log("👤 Resolved userId:", userId);
+    return { userId, payload };
+  } catch (e) {
+    console.warn("⚠️ Decode JWT failed:", e?.message || e);
+    return { userId: null, payload: null };
+  }
+};
+
 const _QrButton = ({ onPress, disabled = false }) => {
   return (
     <TouchableOpacity
@@ -82,15 +116,10 @@ const _sortButton = ({ currentSort, onSelect }) => {
 };
 
 const _importanceTag = ({ level }) => {
-  const colors = {
-    high: "#EF4444", // Red
-    medium: "#F59E0B", // Orange
-    low: "#3B82F6", // Blue
-  };
-
+  const colors = { high: "#EF4444", medium: "#F59E0B", low: "#3B82F6" };
   return (
     <View style={[styles.tag, { backgroundColor: colors[level] || "#ccc" }]}>
-      <Text style={styles.tagText}>{level.toUpperCase()}</Text>
+      <Text style={styles.tagText}>{(level || "low").toUpperCase()}</Text>
     </View>
   );
 };
@@ -115,8 +144,8 @@ const _medicalRecordCard = ({
         <Text style={styles.cardLabel}>Medications:</Text>
         <Text style={styles.cardValue}>{medications}</Text>
       </View>
-                        <Text style={styles.cardLabel}>Period:</Text>
-                        <Text style={styles.cardValue}>{utils.formatDate(med.start_date)} - {utils.formatDate(med.end_date)}</Text>
+
+      {/* Treatment Period */}
       <View style={styles.row}>
         <Text style={styles.cardLabel}>Treatment Period:</Text>
         <Text style={styles.cardValue}>
@@ -133,10 +162,15 @@ const _medicalRecordCard = ({
 const MedicalHistory = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { token } = route.params || {};
+  const tokenFromParams = route.params?.token; // <- token truyền từ Login/Tab
 
+  // QR and debug states from version 1
   const [qrVisible, setQRVisible] = useState(false);
   const [qrData, setQRData] = useState("");
+  const [debugUid, setDebugUid] = useState(null);
+  const [debugEmail, setDebugEmail] = useState(null);
+  
+  // Medical records and server states from version 2
   const [medicalRecords, setRecord] = useState([]); // now holds grouped prescriptions
   const [expandedIds, setExpandedIds] = useState({}); // track expanded prescription ids
   const [reminders, setReminders] = useState([]);
@@ -155,71 +189,39 @@ const MedicalHistory = () => {
         (a, b) => new Date(a.startDate) - new Date(b.startDate)
       );
     }
-    setRecord(sortedRecords);
-    setSortMode(mode);
+    return sortedRecords;
   };
-  const _handleGenerateQR = () => {
-    // const payload = JSON.stringify({
-    //   userId: 123,
-    //   summary: medicalRecords.map(
-    //     ({ disease, importance, medications, startDate, endDate }) => ({
-    //       disease,
-    //       importance,
-    //       medications,
-    //       startDate,
-    //       endDate,
-    //     })
-    //   ),
-    // });
-    const payload = JSON.stringify({
-      name: "Tran Minh Quoc",
-      age: 20,
-      status: "Stable",
-      record: {
-        birthDate: "2000-01-15",
-        gender: "Male",
-        address: "123 Ly Thuong Kiet, Ha Noi",
-        phone: "(028) 1234 5678",
-        maritalStatus: "Single",
-        email: "minhquoc@meditrackcom",
-        employment: "Student",
-        insurance: {
-          provider: "Bao Viet",
-          plan: "Standard",
-          id: "BV001",
-        },
-        emergencyContact: {
-          name: "Tran Minh Tam",
-          phone: "0987-654-321",
-          relation: "Father",
-        },
-        medicalHistory: [
-          {
-            condition: "Roi loan giac ngu man tinh",
-            medication: "Temazepam, Sildenafil, Bumetanide",
-            allergy: "None",
-            startDate: "2025-07-25",
-          },
-          {
-            condition: "Viem da day",
-            medication: "Omeprazole, Hyoscine butylbromide, Sucralfate",
-            allergy: "None",
-            startDate: "2025-07-25",
-          },
-          {
-            condition: "Viem hong cap",
-            medication: "Acemuc, Propanolol, Augmentin",
-            allergy: "None",
-            startDate: "2025-01-18",
-          },
-        ],
-      },
-    });
-    // const base64 = Buffer.from(payload).toString("base64"); // ✅ Base64 unicode
-    const base64 = btoa(payload); // ✅ Base64 ASCII
-    setQRData(base64);
-    setQRVisible(true);
-  };
+
+  useEffect(() => {
+    if (!tokenFromParams) {
+      console.warn("⚠️ Missing access token in route params");
+      setDebugUid(null);
+      setDebugEmail(null);
+      return;
+    }
+
+    const { userId, payload } = getUserIdFromToken(tokenFromParams);
+    setDebugUid(userId);
+    setDebugEmail(payload?.email || null);
+  }, [tokenFromParams]);
+
+    const handleGenerateQR = () => {
+      if (!tokenFromParams) {
+        console.warn("Missing access token, cannot build QR");
+        return;
+      }
+      
+      // Combine both JWT token and medical data approaches
+      const payload = {
+        // JWT token info from version 1
+        t: tokenFromParams, // access_token (JWT)
+        v: 1, // version để sau này đổi format dễ
+        exp: Date.now() + 5 * 60 * 1000, // 5 phút
+      };
+      const base64 = Buffer.from(JSON.stringify(payload), "utf-8").toString("base64");
+      setQRData(base64);
+      setQRVisible(true);
+   };
 
   // enable LayoutAnimation on Android
   useEffect(() => {
@@ -231,11 +233,11 @@ const MedicalHistory = () => {
   // Fetch prescriptions from backend and group by disease_name
   const fetchPrescriptions = async () => {
     try {
-      if (!token) return;
-      console.log("🔑 MedicalHistory token:", token);
+      if (!tokenFromParams) return;
+      console.log("🔑 MedicalHistory token:", tokenFromParams);
       const res = await fetch(`${BASE_URL}/api/prescriptions/list`, {
         method: "GET",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenFromParams}` },
       });
       const data = await res.json();
       console.log("📥 Response from /prescriptions/list:", data);
@@ -250,10 +252,10 @@ const MedicalHistory = () => {
   // Fetch upcoming reminders
   const fetchReminders = async () => {
     try {
-      if (!token) return;
+      if (!tokenFromParams) return;
       const res = await fetch(`${BASE_URL}/api/reminders/upcoming`, {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${tokenFromParams}` },
       });
       const data = await res.json();
       setReminders(Array.isArray(data?.reminders) ? data.reminders : []);
@@ -265,7 +267,7 @@ const MedicalHistory = () => {
   useEffect(() => {
     fetchReminders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [tokenFromParams]);
 
   // Re-fetch prescriptions when screen becomes focused so saved items show immediately
   useFocusEffect(
@@ -273,7 +275,7 @@ const MedicalHistory = () => {
       fetchPrescriptions();
       // no cleanup
       return () => {};
-    }, [token])
+    }, [tokenFromParams])
   );
 
   // Edit / Delete / Save handlers
@@ -293,7 +295,7 @@ const MedicalHistory = () => {
 
   const handleSaveToServer = async () => {
     try {
-      if (!token) {
+      if (!tokenFromParams) {
         alert("Not authenticated");
         return;
       }
@@ -311,7 +313,7 @@ const MedicalHistory = () => {
         try {
           const reviewRes = await fetch(`${BASE_URL}/api/ocr/uploads/${group.upload_id}/review`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenFromParams}` },
             body: JSON.stringify({ ocr_upload_id: group.upload_id, medicines: medicinesPayload, verified: false }),
           });
           if (!reviewRes.ok) {
@@ -343,7 +345,7 @@ const MedicalHistory = () => {
         try {
           const res = await fetch(`${BASE_URL}/api/prescriptions/save`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokenFromParams}` },
             body: JSON.stringify(payload),
           });
           const data = await res.json();
@@ -384,23 +386,18 @@ const MedicalHistory = () => {
   };
   return (
     <ScrollView style={styles.container}>
-      {/* Avatar  */}
       <CircleButton
         style={styles.avatar}
-        onPress={() => {
-          navigation.navigate("Profile");
-        }}
-      ></CircleButton>
+        onPress={() => navigation.navigate("Profile")}
+      />
 
-      {/* Header  */}
       <Text style={styles.header}>Medical History</Text>
 
       {/* Search Bar  */}
       <SearchBar style={styles.searchBar}></SearchBar>
 
       {/* QR Generate  */}
-  <_QrButton onPress={_handleGenerateQR} disabled={!(medicalRecords && medicalRecords.length > 0)} />
-
+      <_QrButton onPress={handleGenerateQR} disabled={!(medicalRecords && medicalRecords.length > 0)} />
       {/* Sorting - Temporarily hidden */}
       {/* <_sortButton currentSort={sortMode} onSelect={_sortRecords} /> */}
 
@@ -496,17 +493,10 @@ const MedicalHistory = () => {
     </ScrollView>
   );
 };
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  avatar: {
-    position: "absolute",
-    top: 60,
-    right: 20,
-  },
 
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fff" },
+  avatar: { position: "absolute", top: 60, right: 20 },
   header: {
     ...globalStyles.headingTwo,
     alignSelf: "center",
@@ -519,7 +509,6 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     alignSelf: "center",
   },
-
   QrButton: {
     flexDirection: "row",
     backgroundColor: "#347CFF",

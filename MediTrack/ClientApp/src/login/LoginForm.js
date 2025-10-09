@@ -51,10 +51,7 @@ const LoginForm = () => {
         }
 
         // ✅ Điều hướng vào tab Home và truyền token qua params của Home
-        navigation.navigate("MainTab", {
-          screen: "Home",
-          params: { token },
-        });
+        navigation.navigate("MainTab", { token });
       } else {
         setErrorMessage("Incorrect email or password");
       }

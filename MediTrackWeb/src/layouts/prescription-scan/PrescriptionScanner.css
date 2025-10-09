@@ -66,3 +66,44 @@
 .toggle-button:hover {
   background-color: #1e40af;
 }
+
+.actions-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.loading {
+  color: #2563eb;
+}
+
+.debug-panel {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+.debug-block {
+  margin-top: 8px;
+}
+.debug-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #374151;
+}
+.debug-pre {
+  background: #111827;
+  color: #e5e7eb;
+  padding: 8px;
+  border-radius: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+.debug-inline {
+  margin-top: 6px;
+  font-size: 14px;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

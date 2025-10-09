@@ -1,73 +1,190 @@
+// WebApp/src/pages/PrescriptionScanner.jsx
 import React, { useState } from "react";
 import "./PrescriptionScanner.css";
 import MedicalRecord from "../medical-record-popup/MedicalRecord";
 
-// const patientData = {
-//   name: "Ho Minh Nhat",
-//   age: 20,
-//   status: "Stable",
-//   record: {
-//     birthDate: "2004-01-15",
-//     gender: "Male",
-//     address: "123 Ly Thuong Kiet, Ha Noi",
-//     phone: "0123-456-789",
-//     maritalStatus: "Single",
-//     email: "nhat.ho@example.com",
-//     employment: "Student",
-//     insurance: {
-//       provider: "Bao Viet",
-//       plan: "Standard",
-//       id: "BV001",
-//     },
-//     emergencyContact: {
-//       name: "Ho Minh Tam",
-//       phone: "0987-654-321",
-//       relation: "Father",
-//     },
-//     medicalHistory: [
-//       {
-//         condition: "Myopia",
-//         medication: "None",
-//         allergy: "None",
-//         startDate: "2012-09-01",
-//       },
-//     ],
-//   },
-// };
+const BASE_URL = "http://localhost:8000";
 
-// // Encode to Base64
-// const json = JSON.stringify(patientData);
-// const base64 = btoa(json);
-// console.log(base64);
+/* ============== helpers ============== */
+
+// Decode base64 “an toàn” (xử lý padding/URL-safe)
+const safeB64DecodeToString = (b64) => {
+  let s = String(b64 || "")
+    .trim()
+    .replace(/\s+/g, "");
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  const mod = s.length % 4;
+  if (mod === 2) s += "==";
+  else if (mod === 3) s += "=";
+  else if (mod !== 0) throw new Error("Invalid base64 length");
+  return atob(s);
+};
+
+// rows từ prescriptions (giữ prescription_id để nhóm)
+const mapFromPrescriptions = (prescriptions = []) => {
+  const rows = [];
+  prescriptions.forEach((p) => {
+    const condition =
+      p?.disease_name || p?.diagnosis || p?.condition || "Unknown";
+    const prescDate = p?.prescription_date || p?.created_at || "";
+    const prescId = p?.id || p?.prescription_id || "";
+
+    const items = Array.isArray(p?.medications)
+      ? p.medications
+      : Array.isArray(p?.prescription_items)
+      ? p.prescription_items
+      : [];
+
+    items.forEach((m) => {
+      const name = m?.name || m?.medication_name || m?.drug_name || "";
+      const dosage = m?.dosage || m?.dose || "";
+      const frequency = m?.frequency || m?.freq || "";
+      const notes = m?.notes || m?.remark || "";
+      const start =
+        m?.start_date || m?.started_at || prescDate || p?.created_at || "";
+      rows.push({
+        prescription_id: prescId,
+        condition,
+        medication: [name, dosage, frequency].filter(Boolean).join(" • "),
+        allergy: notes || "None",
+        startDate: start,
+      });
+    });
+  });
+  return rows;
+};
+
+// rows từ items rời
+const mapFromStandaloneItems = (items = [], fallbackCondition = "Medication") =>
+  (items || []).map((m) => ({
+    prescription_id: m?.prescription_id || "", // có thì nhóm theo, không thì rỗng
+    condition: m?.condition || m?.disease || fallbackCondition,
+    medication: [
+      m?.name || m?.medication_name || m?.drug_name || "",
+      m?.dosage || m?.dose || "",
+      m?.frequency || m?.freq || "",
+    ]
+      .filter(Boolean)
+      .join(" • "),
+    allergy: m?.notes || m?.remark || "None",
+    startDate:
+      m?.start_date || m?.started_at || m?.created_at || m?.updated_at || "",
+  }));
+
+// 🧠 Gom các dòng cùng prescription_id + condition + startDate
+const groupRowsByPrescription = (rows) => {
+  const map = new Map();
+  rows.forEach((r) => {
+    const key = `${r.prescription_id || ""}__${r.condition}__${r.startDate}`;
+    if (!map.has(key)) {
+      map.set(key, { ...r, medication: [r.medication] });
+    } else {
+      map.get(key).medication.push(r.medication);
+    }
+  });
+  return Array.from(map.values()).map((r) => ({
+    ...r,
+    medication: r.medication.join(", "),
+  }));
+};
+
+// Chuẩn hóa dữ liệu tổng hợp {profile, prescriptions, ...} -> shape MedicalRecord
+const normalizeToPatient = (bundle) => {
+  const prof = bundle?.profile || bundle?.user || bundle?.user_profile || {};
+
+  const emergencyContact =
+    typeof prof?.emergency_contact === "string"
+      ? { name: "", phone: prof.emergency_contact, relation: "" }
+      : prof?.emergencyContact || { name: "", phone: "", relation: "" };
+
+  const rawRows = [
+    ...mapFromPrescriptions(bundle?.prescriptions),
+    ...mapFromStandaloneItems(
+      bundle?.standalone_items ||
+        bundle?.unassigned_items ||
+        bundle?.items ||
+        bundle?.prescription_items,
+      "Unassigned"
+    ),
+  ];
+
+  const groupedRows = groupRowsByPrescription(rawRows);
+
+  return {
+    name: prof?.full_name || prof?.name || "Patient",
+    record: {
+      gender: prof?.gender || "",
+      birthDate: prof?.date_of_birth || prof?.birthDate || "",
+      address: prof?.address || "",
+      phone: prof?.phone || "",
+      maritalStatus: prof?.maritalStatus || "",
+      email: prof?.email || "",
+      employment: prof?.employment || "",
+      insurance: prof?.insurance || {},
+      emergencyContact,
+      medicalHistory: groupedRows,
+    },
+  };
+};
+
+/* ============== component ============== */
 
 const PrescriptionScanner = () => {
-  const [manualMode, setManualMode] = useState(false);
   const [manualText, setManualText] = useState("");
   const [decodedPatient, setDecodedPatient] = useState(null);
-  const toggleMode = () => {
-    setManualMode(!manualMode);
-    setManualText("");
+  const [loading, setLoading] = useState(false);
+
+  const fetchWithToken = async (token, path) => {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) throw new Error(`${path} -> HTTP ${res.status}`);
+    return res.json();
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); // prevent newline on Enter without Shift
-      try {
-        // Decode Base64 string and parse the JSON
-        const jsonString = atob(manualText); // decode base64 to string
-        const parsed = JSON.parse(jsonString); // parse to object
-        setDecodedPatient(parsed); // Show popup
-        setManualText(""); // Clear input after decoding
-      } catch (err) {
-        console.error("Failed to decode or parse input:", err);
-      }
+  const handleKeyDown = async (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+
+    try {
+      setLoading(true);
+
+      // 1) Decode QR -> { t: access_token, ... }
+      const s = safeB64DecodeToString(manualText);
+      const parsed = JSON.parse(s);
+      const token = parsed?.t;
+      if (!token) throw new Error("QR missing token field 't'");
+
+      // 2) Gọi song song: profile + prescriptions
+      const [profileResp, prescResp] = await Promise.all([
+        fetchWithToken(token, "/api/users/profile"), // trả { profile: {...} }
+        fetchWithToken(token, "/api/prescriptions/list?limit=50&offset=0"),
+      ]);
+
+      // 3) Gộp bundle rồi normalize
+      const bundle = {
+        profile: profileResp?.profile || profileResp,
+        ...prescResp,
+      };
+      const patient = normalizeToPatient(bundle);
+
+      // 4) Show popup
+      setDecodedPatient(patient);
+      setManualText("");
+    } catch (err) {
+      console.error("Scan failed:", err);
+      alert(`Scan failed: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="scanner-page">
       <h2>Scanner</h2>
-
       <div className="scanner-card">
         <div className="manual-input">
           <label htmlFor="prescription">Code Input:</label>
@@ -77,19 +194,15 @@ const PrescriptionScanner = () => {
             value={manualText}
             onChange={(e) => setManualText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Click here and scan..."
+            placeholder="Paste/scan base64, then press Enter…"
           />
+          {loading && <p>Loading…</p>}
         </div>
       </div>
 
       {decodedPatient && (
         <MedicalRecord
-          patient={{
-            name: decodedPatient.name,
-            age: decodedPatient.age,
-            status: decodedPatient.status,
-            ...decodedPatient.record,
-          }}
+          patient={decodedPatient}
           onClose={() => setDecodedPatient(null)}
         />
       )}
