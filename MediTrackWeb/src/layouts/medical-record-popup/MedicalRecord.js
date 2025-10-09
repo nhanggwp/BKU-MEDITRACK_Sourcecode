@@ -16,7 +16,7 @@ const renderMedications = (text) => {
   if (!text) return "";
   const parts = text.split(/,\s*/).filter(Boolean);
   return (
-    <ul style={{ margin: 0, paddingLeft: "1.2em" }}>
+    <ul className="mr-medication-list">
       {parts.map((p, i) => (
         <li key={i}>{p}</li>
       ))}
@@ -46,88 +46,120 @@ const MedicalRecord = ({ patient, onClose }) => {
 
         <section className="mr-section">
           <h2>General Information</h2>
-          <p>
-            <strong>Name:</strong> {patient.name || rec.name || ""}
-          </p>
-          <p>
-            <strong>Gender:</strong> {rec.gender || ""}
-          </p>
-          <p>
-            <strong>Date of Birth:</strong> {fmtDate(rec.birthDate)}
-          </p>
-          <p>
-            <strong>Address:</strong> {rec.address || ""}
-          </p>
-          <p>
-            <strong>Phone:</strong> {rec.phone || ""}
-          </p>
-          <p>
-            <strong>Marital Status:</strong> {rec.maritalStatus || ""}
-          </p>
-          <p>
-            <strong>Email:</strong> {rec.email || ""}
-          </p>
-          <p>
-            <strong>Employment:</strong> {rec.employment || ""}
-          </p>
+          <div className="mr-info-grid">
+            <div className="mr-info-item">
+              <strong>Full Name</strong>
+              <span>{patient.name || rec.name || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Gender</strong>
+              <span>{rec.gender || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Date of Birth</strong>
+              <span>{fmtDate(rec.birthDate) || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Phone Number</strong>
+              <span>{rec.phone || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Email Address</strong>
+              <span>{rec.email || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Marital Status</strong>
+              <span>{rec.maritalStatus || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Employment</strong>
+              <span>{rec.employment || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Address</strong>
+              <span>{rec.address || "Not specified"}</span>
+            </div>
+          </div>
         </section>
 
         <section className="mr-section">
           <h2>Health Coverage</h2>
-          <p>
-            <strong>Provider:</strong> {insurance.provider || ""}
-          </p>
-          <p>
-            <strong>Plan:</strong> {insurance.plan || ""}
-          </p>
-          <p>
-            <strong>Insurance ID:</strong> {insurance.id || ""}
-          </p>
+          <div className="mr-info-grid">
+            <div className="mr-info-item">
+              <strong>Insurance Provider</strong>
+              <span>{insurance.provider || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Plan Type</strong>
+              <span>{insurance.plan || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Insurance ID</strong>
+              <span>{insurance.id || "Not specified"}</span>
+            </div>
+          </div>
         </section>
 
         <section className="mr-section">
           <h2>Emergency Contact</h2>
-          <p>
-            <strong>Name:</strong> {emer.name || ""}
-          </p>
-          <p>
-            <strong>Phone:</strong> {emer.phone || ""}
-          </p>
-          <p>
-            <strong>Relation:</strong> {emer.relation || ""}
-          </p>
+          <div className="mr-info-grid">
+            <div className="mr-info-item">
+              <strong>Contact Name</strong>
+              <span>{emer.name || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Phone Number</strong>
+              <span>{emer.phone || "Not specified"}</span>
+            </div>
+            <div className="mr-info-item">
+              <strong>Relationship</strong>
+              <span>{emer.relation || "Not specified"}</span>
+            </div>
+          </div>
         </section>
 
         <section className="mr-section">
-          <h2>Medical History</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Condition</th>
-                <th>Medication</th>
-                <th>Allergy</th>
-                <th>Start Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.length === 0 ? (
+          <h2>Medical History & Prescriptions</h2>
+          <div className="mr-table-container">
+            <table>
+              <thead>
                 <tr>
-                  <td colSpan={4} style={{ textAlign: "center", opacity: 0.7 }}>
-                    No records
-                  </td>
+                  <th>Condition/Diagnosis</th>
+                  <th>Medications</th>
+                  <th>Doctor</th>
+                  <th>Clinic</th>
+                  <th>Date</th>
+                  <th>Notes</th>
                 </tr>
-              ) : (
-                history.map((entry, idx) => (
-                  <tr key={idx}>
-                    <td>{entry?.condition || ""}</td>
-                    <td>{renderMedications(entry?.medication)}</td>
-                    <td>{entry?.allergy || ""}</td>
-                    <td>{fmtDate(entry?.startDate)}</td>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="mr-empty-state">
+                      No medical history or prescription records available
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  history.map((entry, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <strong>{entry?.condition || "Not specified"}</strong>
+                      </td>
+                      <td>{renderMedications(entry?.medication)}</td>
+                      <td>{entry?.doctor || "Not specified"}</td>
+                      <td>{entry?.clinic || "Not specified"}</td>
+                      <td>{fmtDate(entry?.startDate) || "Not specified"}</td>
+                      <td>
+                        <span className="mr-notes">
+                          {entry?.allergy || "No notes"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     </div>
