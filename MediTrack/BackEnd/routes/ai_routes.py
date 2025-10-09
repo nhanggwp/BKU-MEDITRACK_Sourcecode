@@ -25,28 +25,47 @@ class CustomPromptRequest(BaseModel):
     include_context: bool = True
 
 async def get_current_user_id(request: Request) -> str:
-    """Extract user ID from token"""
+    """Extract user ID from token (required)."""
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header missing")
-    
+
     token = auth_header.replace("Bearer ", "")
     user = await auth_service.verify_token(token)
-    
+
     # Set the authentication token for the supabase service
     supabase_service.set_auth_token(token)
-    
+
     return user["id"]
+
+async def get_current_user_id_optional(request: Request) -> Optional[str]:
+    """Extract user ID from token if available; return None if not provided or invalid.
+
+    Use this for endpoints that can operate without authentication (no user context/caching).
+    """
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        return None
+    try:
+        token = auth_header.replace("Bearer ", "")
+        user = await auth_service.verify_token(token)
+        # Set the authentication token for the supabase service
+        supabase_service.set_auth_token(token)
+        return user.get("id")
+    except Exception:
+        # Treat as unauthenticated if token invalid
+        return None
 
 @router.post("/explain")
 async def generate_ai_explanation(request: Request, explanation_request: AIExplanationRequest):
     """Generate AI explanation for medication risks and interactions"""
     try:
-        user_id = await get_current_user_id(request)
+        # Allow unauthenticated access; we'll skip user-context and caching when user_id is None
+        user_id = await get_current_user_id_optional(request)
         
         # Get user context if requested
         user_context = {}
-        if explanation_request.include_medical_history:
+        if explanation_request.include_medical_history and user_id:
             medical_history = await supabase_service.get_medical_history(user_id)
             allergies = await supabase_service.get_allergies(user_id)
             user_context = {
@@ -55,19 +74,20 @@ async def generate_ai_explanation(request: Request, explanation_request: AIExpla
             }
         
         # Check if we already have a cached explanation
-        cached_explanation = await supabase_service.get_cached_ai_explanation(
-            user_id, 
-            explanation_request.medication_list,
-            explanation_request.risk_factors
-        )
-        
-        if cached_explanation:
-            return {
-                "explanation": cached_explanation["explanation"],
-                "format": cached_explanation["explanation_format"],
-                "cached": True,
-                "created_at": cached_explanation["created_at"]
-            }
+        cached_explanation = None
+        if user_id:
+            cached_explanation = await supabase_service.get_cached_ai_explanation(
+                user_id,
+                explanation_request.medication_list,
+                explanation_request.risk_factors
+            )
+            if cached_explanation:
+                return {
+                    "explanation": cached_explanation["explanation"],
+                    "format": cached_explanation["explanation_format"],
+                    "cached": True,
+                    "created_at": cached_explanation["created_at"]
+                }
         
         # Get drug interactions for the medications first
         from services.drug_interaction_service import DrugInteractionService
@@ -98,8 +118,10 @@ async def generate_ai_explanation(request: Request, explanation_request: AIExpla
             "tokens_used": explanation_result.get("tokens_used", 0)
         }
         
-        saved_explanation = await supabase_service.save_ai_explanation(user_id, explanation_data)
-        
+        saved_explanation = None
+        if user_id:
+            saved_explanation = await supabase_service.save_ai_explanation(user_id, explanation_data)
+
         return {
             "explanation": explanation_result["explanation"],
             "format": explanation_result["format"],  # Use format from AI service response
@@ -109,7 +131,7 @@ async def generate_ai_explanation(request: Request, explanation_request: AIExpla
             "prompt_used": explanation_result["prompt_used"],
             "tokens_used": explanation_result.get("tokens_used", 0),
             "cached": False,
-            "explanation_id": saved_explanation["id"]
+            "explanation_id": saved_explanation["id"] if saved_explanation else None
         }
     except HTTPException:
         raise
@@ -127,11 +149,12 @@ async def generate_ai_explanation_alias(request: Request, explanation_request: A
 async def generate_custom_explanation(request: Request, prompt_request: CustomPromptRequest):
     """Generate AI explanation with custom prompt"""
     try:
-        user_id = await get_current_user_id(request)
+        # Optional auth for general chatbot usage
+        user_id = await get_current_user_id_optional(request)
         
         # Get user context if requested
         user_context = {}
-        if prompt_request.include_context:
+        if prompt_request.include_context and user_id:
             medical_history = await supabase_service.get_medical_history(user_id)
             allergies = await supabase_service.get_allergies(user_id)
             user_context = {

@@ -138,8 +138,8 @@ export default function PrescriptionChecker() {
 
     } catch (error) {
       console.error('Interaction check failed:', error);
-      setAlert("Failed to check interactions. Please try again.");
-      setToast({ message: error.message, type: "error" });
+      // setAlert("Failed to check interactions. Please try again.");
+      // setToast({ message: error.message, type: "error" });
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +255,7 @@ export default function PrescriptionChecker() {
               borderRadius: "4px",
               borderLeft: `4px solid ${drugInteractionService.getRiskColor(interaction.severity)}`
             }}>
-              <strong>{interaction.drug1} + {interaction.drug2}</strong>
+              <strong>{interaction.drug1_name || interaction.drug1} + {interaction.drug2_name || interaction.drug2}</strong>
               <br />
               <span style={{ color: drugInteractionService.getRiskColor(interaction.severity) }}>
                 Severity: {interaction.severity}

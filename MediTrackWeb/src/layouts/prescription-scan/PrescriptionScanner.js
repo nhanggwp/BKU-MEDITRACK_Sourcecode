@@ -1,115 +1,68 @@
-// WebApp/src/pages/PrescriptionScanner.jsx
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import "./PrescriptionScanner.css";
 import MedicalRecord from "../medical-record-popup/MedicalRecord";
 
 const BASE_URL = "http://localhost:8000";
 
-/* ============== helpers ============== */
-
-// Decode base64 “an toàn” (xử lý padding/URL-safe)
-const safeB64DecodeToString = (b64) => {
-  let s = String(b64 || "")
-    .trim()
-    .replace(/\s+/g, "");
-  s = s.replace(/-/g, "+").replace(/_/g, "/");
-  const mod = s.length % 4;
-  if (mod === 2) s += "==";
-  else if (mod === 3) s += "=";
-  else if (mod !== 0) throw new Error("Invalid base64 length");
-  return atob(s);
+const safeB64DecodeToString = (input) => {
+  try {
+    const trimmed = String(input || "").trim();
+    
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      return trimmed;
+    }
+    
+    let s = trimmed.replace(/\s+/g, "");
+    s = s.replace(/-/g, "+").replace(/_/g, "/");
+    
+    const mod = s.length % 4;
+    if (mod === 2) s += "==";
+    else if (mod === 3) s += "=";
+    else if (mod !== 0 && mod !== 1) {
+      throw new Error("Invalid base64 length");
+    }
+    
+    return atob(s);
+  } catch (error) {
+    const fallback = String(input || "").trim();
+    if (fallback.startsWith('{') && fallback.endsWith('}')) {
+      return fallback;
+    }
+    throw new Error(`Failed to decode input: ${error.message}`);
+  }
 };
 
-// rows từ prescriptions (giữ prescription_id để nhóm)
-const mapFromPrescriptions = (prescriptions = []) => {
-  const rows = [];
-  prescriptions.forEach((p) => {
-    const condition =
-      p?.disease_name || p?.diagnosis || p?.condition || "Unknown";
-    const prescDate = p?.prescription_date || p?.created_at || "";
-    const prescId = p?.id || p?.prescription_id || "";
+// Process prescriptions and prescription_items data from backend  
+const processMedicalHistory = (prescriptions = []) => {
+  const groupedHistory = [];
+  
+  // Process each prescription with its nested medications
+  prescriptions.forEach(prescription => {
+    const medications = (prescription.medications || []).map(med => 
+      [med.name, med.dosage, med.frequency].filter(Boolean).join(" • ")
+    ).join(", ");
 
-    const items = Array.isArray(p?.medications)
-      ? p.medications
-      : Array.isArray(p?.prescription_items)
-      ? p.prescription_items
-      : [];
-
-    items.forEach((m) => {
-      const name = m?.name || m?.medication_name || m?.drug_name || "";
-      const dosage = m?.dosage || m?.dose || "";
-      const frequency = m?.frequency || m?.freq || "";
-      const notes = m?.notes || m?.remark || "";
-      const start =
-        m?.start_date || m?.started_at || prescDate || p?.created_at || "";
-      rows.push({
-        prescription_id: prescId,
-        condition,
-        medication: [name, dosage, frequency].filter(Boolean).join(" • "),
-        allergy: notes || "None",
-        startDate: start,
-      });
+    groupedHistory.push({
+      condition: prescription.disease_name || "General Prescription",
+      medication: medications || "No medications recorded",
+      allergy: prescription.notes || "None",
+      startDate: prescription.prescription_date || prescription.created_at || "",
+      doctor: prescription.doctor_name || "",
+      clinic: prescription.clinic_name || ""
     });
   });
-  return rows;
+
+  return groupedHistory;
 };
 
-// rows từ items rời
-const mapFromStandaloneItems = (items = [], fallbackCondition = "Medication") =>
-  (items || []).map((m) => ({
-    prescription_id: m?.prescription_id || "", // có thì nhóm theo, không thì rỗng
-    condition: m?.condition || m?.disease || fallbackCondition,
-    medication: [
-      m?.name || m?.medication_name || m?.drug_name || "",
-      m?.dosage || m?.dose || "",
-      m?.frequency || m?.freq || "",
-    ]
-      .filter(Boolean)
-      .join(" • "),
-    allergy: m?.notes || m?.remark || "None",
-    startDate:
-      m?.start_date || m?.started_at || m?.created_at || m?.updated_at || "",
-  }));
-
-// 🧠 Gom các dòng cùng prescription_id + condition + startDate
-const groupRowsByPrescription = (rows) => {
-  const map = new Map();
-  rows.forEach((r) => {
-    const key = `${r.prescription_id || ""}__${r.condition}__${r.startDate}`;
-    if (!map.has(key)) {
-      map.set(key, { ...r, medication: [r.medication] });
-    } else {
-      map.get(key).medication.push(r.medication);
-    }
-  });
-  return Array.from(map.values()).map((r) => ({
-    ...r,
-    medication: r.medication.join(", "),
-  }));
-};
-
-// Chuẩn hóa dữ liệu tổng hợp {profile, prescriptions, ...} -> shape MedicalRecord
 const normalizeToPatient = (bundle) => {
   const prof = bundle?.profile || bundle?.user || bundle?.user_profile || {};
-
-  const emergencyContact =
-    typeof prof?.emergency_contact === "string"
-      ? { name: "", phone: prof.emergency_contact, relation: "" }
-      : prof?.emergencyContact || { name: "", phone: "", relation: "" };
-
-  const rawRows = [
-    ...mapFromPrescriptions(bundle?.prescriptions),
-    ...mapFromStandaloneItems(
-      bundle?.standalone_items ||
-        bundle?.unassigned_items ||
-        bundle?.items ||
-        bundle?.prescription_items,
-      "Unassigned"
-    ),
-  ];
-
-  const groupedRows = groupRowsByPrescription(rawRows);
-
+  
+  // Process medical history from prescriptions with nested medications
+  const medicalHistory = processMedicalHistory(
+    bundle?.prescriptions || []
+  );
+  
   return {
     name: prof?.full_name || prof?.name || "Patient",
     record: {
@@ -121,18 +74,75 @@ const normalizeToPatient = (bundle) => {
       email: prof?.email || "",
       employment: prof?.employment || "",
       insurance: prof?.insurance || {},
-      emergencyContact,
-      medicalHistory: groupedRows,
+      emergencyContact: prof?.emergencyContact || { name: "", phone: "", relation: "" },
+      medicalHistory,
     },
   };
 };
 
-/* ============== component ============== */
-
 const PrescriptionScanner = () => {
-  const [manualText, setManualText] = useState("");
   const [decodedPatient, setDecodedPatient] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerInput, setScannerInput] = useState("");
+  const [scanBuffer, setScanBuffer] = useState("");
+  const inputRef = useRef(null);
+  const scanTimeoutRef = useRef(null);
+
+  // Global keyboard handler for QR scanner input
+  useEffect(() => {
+    const handleGlobalKeyPress = (e) => {
+      if (!isScanning) return;
+      
+      // Ignore special keys except Enter
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (scanBuffer.trim()) {
+          processQRCode(scanBuffer.trim());
+          setScanBuffer("");
+        }
+        return;
+      }
+      
+      // Ignore modifier keys, function keys, etc.
+      if (e.key.length > 1 && e.key !== 'Backspace') return;
+      
+      e.preventDefault();
+      
+      if (e.key === 'Backspace') {
+        setScanBuffer(prev => prev.slice(0, -1));
+      } else {
+        setScanBuffer(prev => prev + e.key);
+        
+        // Clear previous timeout
+        if (scanTimeoutRef.current) {
+          clearTimeout(scanTimeoutRef.current);
+        }
+        
+        // Auto-process after 500ms of no input (typical for QR scanner)
+        scanTimeoutRef.current = setTimeout(() => {
+          const currentBuffer = scanBuffer + e.key;
+          if (currentBuffer.length > 10) { // Minimum reasonable QR length
+            processQRCode(currentBuffer.trim());
+            setScanBuffer("");
+          }
+        }, 500);
+      }
+    };
+
+    if (isScanning) {
+      document.addEventListener('keydown', handleGlobalKeyPress);
+      document.addEventListener('keypress', handleGlobalKeyPress);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyPress);
+      document.removeEventListener('keypress', handleGlobalKeyPress);
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
+    };
+  }, [isScanning, scanBuffer]);
 
   const fetchWithToken = async (token, path) => {
     const res = await fetch(`${BASE_URL}${path}`, {
@@ -145,58 +155,104 @@ const PrescriptionScanner = () => {
     return res.json();
   };
 
-  const handleKeyDown = async (e) => {
-    if (e.key !== "Enter" || e.shiftKey) return;
-    e.preventDefault();
-
+  const processQRCode = useCallback(async (qrCodeData) => {
     try {
       setLoading(true);
+      setScannerInput(""); // Clear visible input
 
-      // 1) Decode QR -> { t: access_token, ... }
-      const s = safeB64DecodeToString(manualText);
+      const s = safeB64DecodeToString(qrCodeData);
       const parsed = JSON.parse(s);
       const token = parsed?.t;
       if (!token) throw new Error("QR missing token field 't'");
 
-      // 2) Gọi song song: profile + prescriptions
+      // Fetch both profile and prescriptions data (prescriptions include nested medications)
       const [profileResp, prescResp] = await Promise.all([
-        fetchWithToken(token, "/api/users/profile"), // trả { profile: {...} }
+        fetchWithToken(token, "/api/users/profile"),
         fetchWithToken(token, "/api/prescriptions/list?limit=50&offset=0"),
       ]);
 
-      // 3) Gộp bundle rồi normalize
       const bundle = {
         profile: profileResp?.profile || profileResp,
-        ...prescResp,
+        prescriptions: prescResp?.prescriptions || prescResp?.data || [],
       };
+      
       const patient = normalizeToPatient(bundle);
-
-      // 4) Show popup
       setDecodedPatient(patient);
-      setManualText("");
+      stopScanner();
     } catch (err) {
       console.error("Scan failed:", err);
       alert(`Scan failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const startScanner = () => {
+    setIsScanning(true);
+    setScannerInput("");
+    setScanBuffer("");
+    // No need to focus on hidden input
+  };
+
+  const stopScanner = () => {
+    setIsScanning(false);
+    setScannerInput("");
+    setScanBuffer("");
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+    }
   };
 
   return (
     <div className="scanner-page">
-      <h2>Scanner</h2>
+      <div className="scanner-header">
+        <h2>QR Code Scanner</h2>
+        <p className="scanner-subtitle">
+          Scan a prescription QR code to view medical records instantly
+        </p>
+      </div>
+
       <div className="scanner-card">
-        <div className="manual-input">
-          <label htmlFor="prescription">Code Input:</label>
-          <textarea
-            id="prescription"
-            rows="6"
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Paste/scan base64, then press Enter…"
+        <div className="scanner-content-section">
+          {/* Scanning indicator - always present */}
+          <div className="scanning-indicator">
+            <div className="scanner-animation">
+              {isScanning && <div className="scan-line"></div>}
+              <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <path d="M9 9h6v6h-6z"/>
+              </svg>
+            </div>
+            
+            <p className="scan-status">
+              {loading ? "Processing..." : 
+               scanBuffer ? "Retrieving info..." : 
+               isScanning ? "Point your QR scanner at the code" : 
+               "Ready to scan QR code"}
+            </p>
+          </div>
+          
+          {/* Hidden input for fallback */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={scannerInput}
+            onChange={() => {}} // Disabled - we use global keyboard capture
+            className="qr-scanner-input-hidden"
+            tabIndex={-1}
+            style={{ position: 'absolute', left: '-9999px', opacity: 0 }}
           />
-          {loading && <p>Loading…</p>}
+          
+          {/* Fixed position button */}
+          <div className="scanner-controls">
+            <button 
+              className={isScanning ? "stop-scan-button" : "start-scan-button"}
+              onClick={isScanning ? stopScanner : startScanner}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : isScanning ? "Stop QR Scanner" : "Start QR Scanner"}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -324,10 +324,18 @@ Please extract and return a JSON with this structure:
             
             response = self.model.generate_content(full_prompt)
             
+            explanation_text = response.text
+            prompt_preview = full_prompt[:200] + "..." if len(full_prompt) > 200 else full_prompt
+            # Rough token estimate similar to generate_risk_explanation
+            token_estimate = int(len(explanation_text.split()) * 1.3)
+
             return {
-                "explanation": response.text,  # Changed from "response" to "explanation" for consistency
+                "explanation": explanation_text,
                 "medications_analyzed": medications,
-                "custom_prompt": custom_prompt
+                "custom_prompt": custom_prompt,
+                "prompt_used": prompt_preview,
+                "tokens_used": token_estimate,
+                "format": "markdown"
             }
             
         except Exception as e:

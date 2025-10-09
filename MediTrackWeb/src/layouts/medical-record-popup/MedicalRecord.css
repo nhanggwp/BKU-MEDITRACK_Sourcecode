@@ -1,102 +1,278 @@
-/* Overlay for the modal */
+/* Modern Medical Record Modal Styles */
 .mr-popup-overlay {
   position: fixed;
   top: 0;
   left: 250px; /* match sidebar width */
   width: calc(100% - 250px);
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 999;
+  animation: fadeIn 0.3s ease-out;
 }
 
-/* Styled modal container */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modern styled modal container */
 .mr-popup-content {
-  background-color: #f0f8ff;
-  padding: 30px;
-  border-radius: 12px;
-  width: 60%;
-  height: 90%;
-  overflow: auto;
-  border: 1px solid #cce0f5;
-  font-family: "Segoe UI", sans-serif;
-  font-size: 16px;
+  background: linear-gradient(145deg, #ffffff 0%, #fafbff 100%);
+  padding: 32px;
+  border-radius: 20px;
+  width: min(90%, 1000px);
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid #e1e8f0;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 15px;
   line-height: 1.6;
-  box-shadow: 0 6px 16px rgba(0, 102, 204, 0.1);
-  color: #003366;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  color: #1e293b;
   position: relative;
+  animation: slideIn 0.3s ease-out;
 }
 
-/* Close button styling */
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Modern close button */
 .mr-close-button {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: #cc0000;
+  top: 20px;
+  right: 20px;
+  background: #ef4444;
   color: white;
   border: none;
-  font-size: 1rem;
-  padding: 0.5rem 0.7rem;
-  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 10px;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
 }
 
-/* Header */
+.mr-close-button:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+/* Header styling */
 .mr-popup-content h1 {
   text-align: center;
-  color: #0056b3;
-  margin-bottom: 30px;
-  font-size: 32px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 32px;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
-/* Section style */
+/* Card-style sections */
 .mr-section {
-  margin-bottom: 30px;
-  padding: 20px;
-  border: 1px solid #cce0f5;
-  border-radius: 10px;
-  background-color: #e6f2ff;
+  margin-bottom: 24px;
+  padding: 24px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.mr-section:hover {
+  box-shadow: 0 8px 25px -8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .mr-section h2 {
-  margin-bottom: 12px;
-  font-size: 22px;
-  color: #004a99;
-  border-bottom: 2px solid #99c2ff;
-  padding-bottom: 5px;
+  margin-bottom: 20px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e40af;
+  border-bottom: 2px solid #dbeafe;
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Table styles */
+.mr-section h2::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 2px;
+}
+
+/* Information grid layout */
+.mr-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.mr-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mr-info-item strong {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mr-info-item span {
+  color: #1f2937;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Modern table styles */
+.mr-table-container {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  margin-top: 16px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
-}
-
-table,
-th,
-td {
-  border: 1px solid #a3c2f0;
+  background: white;
 }
 
 th {
-  background-color: #cce6ff;
-  color: #00264d;
+  background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+  color: #374151;
   text-align: left;
-  padding: 10px;
-  font-size: 15px;
+  padding: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 td {
-  padding: 10px;
-  font-size: 15px;
-  color: #003366;
+  padding: 16px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
 }
 
-/* Paragraphs inside section */
-.section p {
-  margin: 6px 0;
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:hover {
+  background-color: #fafbfc;
+}
+
+/* Medication list styling */
+.mr-medication-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.mr-medication-list li {
+  position: relative;
+  margin-bottom: 4px;
+  padding-left: 8px;
+}
+
+.mr-medication-list li::before {
+  content: '•';
+  color: #3b82f6;
+  font-weight: bold;
+  position: absolute;
+  left: -8px;
+}
+
+/* Notes styling */
+.mr-notes {
+  font-style: italic;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* Empty state styling */
+.mr-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .mr-popup-overlay {
+    left: 0;
+    width: 100%;
+  }
+  
+  .mr-popup-content {
+    width: 95%;
+    padding: 24px;
+    border-radius: 16px;
+  }
+  
+  .mr-popup-content h1 {
+    font-size: 28px;
+  }
+  
+  .mr-info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .mr-section {
+    padding: 20px;
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+.mr-popup-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mr-popup-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.mr-popup-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.mr-popup-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
