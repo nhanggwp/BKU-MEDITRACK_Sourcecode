@@ -440,4 +440,8 @@ docker-compose exec ddi-service free -h
   - Family Medication Management
   - Cross-platform (Web + Mobile)
 
+
+## Team
+Developed by Team BKU-MediTrack for UIT Challenge Competition.
+
 **Thank you for reviewing our submission!**
